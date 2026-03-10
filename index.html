@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impact Analysis Lab - Advanced</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; background: #030508; color: #e2e8f0; }
+        #ui-panel {
+            position: absolute; top: 20px; left: 20px; width: 380px;
+            background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            padding: 24px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7); max-height: 92vh; overflow-y: auto; z-index: 100;
+        }
+        h2 { margin: 0; font-size: 1.5rem; color: #f8fafc; font-weight: 800; letter-spacing: -0.5px; }
+        p.subtitle { margin: 4px 0 20px 0; font-size: 0.8rem; color: #00f0ff; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600;}
+        .control-group { margin-bottom: 12px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+        .control-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        label { font-size: 0.8rem; font-weight: 600; color: #94a3b8; }
+        .value-badge { background: #1e293b; padding: 2px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #38bdf8;}
+        select { width: 100%; padding: 8px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; border-radius: 6px; font-size: 0.9rem; outline: none; appearance: none; }
+        input[type="range"] { width: 100%; appearance: none; background: transparent; cursor: pointer; margin: 6px 0; }
+        input[type="range"]::-webkit-slider-runnable-track { background: #334155; height: 4px; border-radius: 2px; }
+        input[type="range"]::-webkit-slider-thumb { appearance: none; margin-top: -6px; width: 16px; height: 16px; background: #00f0ff; border-radius: 50%; box-shadow: 0 0 10px rgba(0, 240, 255, 0.5); }
+        button { width: 100%; padding: 16px; background: linear-gradient(135deg, #00f0ff 0%, #0088ff 100%); color: #000; border: none; border-radius: 8px; font-weight: 800; font-size: 1rem; cursor: pointer; transition: all 0.2s; margin-top: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 240, 255, 0.5); }
+        button:disabled { background: #334155; color: #64748b; cursor: not-allowed; transform: none; box-shadow: none; }
+        #phase-display { background: rgba(0,0,0,0.5); border: 1px solid #334155; padding: 10px; text-align: center; border-radius: 30px; margin-top: 15px; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px; transition: all 0.3s; }
+        #graph-container { margin-top: 15px; background: rgba(0,0,0,0.4); border: 1px solid #334155; border-radius: 8px; padding: 10px; }
+        .graph-title { font-size: 0.65rem; color: #94a3b8; margin-bottom: 5px; font-weight: 600; display: flex; justify-content: space-between;}
+        canvas#physics-graph { width: 100%; height: 100px; border-bottom: 1px solid #475569; border-left: 1px solid #475569; }
+        #results-panel { margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .metric-box { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; text-align: center; }
+        .metric-box.wide { grid-column: span 2; }
+        .metric-label { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 2px; display: block;}
+        .metric-value { font-weight: 700; font-size: 1.1rem; font-family: 'JetBrains Mono', monospace; }
+        #instructions { position: absolute; bottom: 20px; right: 20px; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(8px); color: #cbd5e1; padding: 12px; border-radius: 8px; font-size: 0.8rem; border: 1px solid rgba(255,255,255,0.1); text-align: right; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-panel">
+        <h2>Impact Analysis Lab</h2>
+        <p class="subtitle">FEA Crash Attenuator Simulation</p>
+        
+        <div class="control-group">
+            <label>Structural Geometry</label>
+            <select id="param-structure">
+                <option value="honeycomb">Hexagonal Honeycomb</option>
+                <option value="square">Square Grid Waffle</option>
+                <option value="tube">Hollow Circular Tubes</option>
+                <option value="solid">Solid Steel Block</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <label>Foil Density (Thickness)</label>
+                <span class="value-badge" id="val-dense">100%</span>
+            </div>
+            <input type="range" id="param-density" min="20" max="200" step="5" value="100">
+        </div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <label>Impactor Mass</label>
+                <span class="value-badge" id="val-mass">1500 kg</span>
+            </div>
+            <input type="range" id="param-mass" min="500" max="3500" step="50" value="1500">
+        </div>
+        
+        <div class="control-group">
+            <div class="control-header">
+                <label>Impact Velocity</label>
+                <span class="value-badge" id="val-vel">64 km/h</span>
+            </div>
+            <input type="range" id="param-vel" min="10" max="150" step="1" value="64">
+        </div>
+
+        <button id="btn-crash">INITIATE NCAP TEST</button>
+
+        <div id="phase-display">SYSTEM IDLE</div>
+
+        <div id="graph-container">
+            <div class="graph-title"><span>FORCE (kN)</span> <span>DISP (m)</span></div>
+            <canvas id="physics-graph" width="300" height="100"></canvas>
+        </div>
+
+        <div id="results-panel">
+            <div class="metric-box wide">
+                <span class="metric-label">Initial Kinetic Energy</span>
+                <span class="metric-value" id="res-ke">0.0 kJ</span>
+            </div>
+            <div class="metric-box">
+                <span class="metric-label">Energy Absorbed</span>
+                <span class="metric-value" id="res-abs" style="color:#00f0ff;">0%</span>
+            </div>
+            <div class="metric-box">
+                <span class="metric-label">G-Force (Peak)</span>
+                <span class="metric-value" id="res-g">0 G</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="instructions">
+        🖱️ Orbit: Left | Pan: Right | Zoom: Scroll
+    </div>
+
+    <script>
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2('#030508', 0.005);
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(-20, 20, 70);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.set(30, 10, 0);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4)); 
+        const dLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dLight.position.set(20, 80, 50); dLight.castShadow = true;
+        scene.add(dLight);
+        const impactGlowLight = new THREE.PointLight(0xff4400, 0, 80);
+        scene.add(impactGlowLight);
+
+        let currentSceneGroup = new THREE.Group();
+        scene.add(currentSceneGroup);
+        
+        let structColumns = []; 
+        let impactorWall = null;
+        const RADIUS = 2.0; const WALL_THICKNESS = 0.25; const CELL_DEPTH = 8.0; 
+        const COLS = 22; const ROWS = 7; const w_orig = Math.sqrt(3) * RADIUS; 
+        const square_side = w_orig; const structureLength = COLS * w_orig; 
+        const START_Y = 2; const METER_PER_UNIT = 0.025; 
+        
+        let isCrashing = false; let mass = 1500; let velocity = 0; let displacement_visual = 0; 
+        let maxDisplacement = structureLength * 0.85; 
+        const graphCanvas = document.getElementById('physics-graph'); const ctx = graphCanvas.getContext('2d');
+        let graphData = [];
+
+        const ui = {
+            struct: document.getElementById('param-structure'),
+            mass: document.getElementById('param-mass'),
+            vel: document.getElementById('param-vel'),
+            dense: document.getElementById('param-density'),
+            btn: document.getElementById('btn-crash'),
+            phase: document.getElementById('phase-display')
+        };
+
+        const matBase = new THREE.MeshStandardMaterial({ color: 0xa0aec0, metalness: 0.9, roughness: 0.4, flatShading: true });
+
+        function createHollowHexagon() {
+            const shape = new THREE.Shape();
+            for(let i=0; i<6; i++) {
+                let angle = i * Math.PI / 3 + Math.PI/6;
+                i===0 ? shape.moveTo(Math.cos(angle)*RADIUS, Math.sin(angle)*RADIUS) : shape.lineTo(Math.cos(angle)*RADIUS, Math.sin(angle)*RADIUS);
+            }
+            const hole = new THREE.Path(); const innerRad = RADIUS - WALL_THICKNESS;
+            for(let i=0; i<6; i++) {
+                let angle = i * Math.PI / 3 + Math.PI/6;
+                i===0 ? hole.moveTo(Math.cos(angle)*innerRad, Math.sin(angle)*innerRad) : hole.lineTo(Math.cos(angle)*innerRad, Math.sin(angle)*innerRad);
+            }
+            shape.holes.push(hole);
+            const ext = new THREE.ExtrudeGeometry(shape, { depth: CELL_DEPTH, bevelEnabled: false, curveSegments: 1 });
+            ext.translate(0, 0, -CELL_DEPTH/2); return ext;
+        }
+
+        function createHollowSquare() {
+            const shape = new THREE.Shape(); const s = square_side / 2;
+            shape.moveTo(-s, -s); shape.lineTo(s, -s); shape.lineTo(s, s); shape.lineTo(-s, s); shape.lineTo(-s, -s);
+            const hole = new THREE.Path(); const inS = s - WALL_THICKNESS;
+            hole.moveTo(-inS, -inS); hole.lineTo(inS, -inS); hole.lineTo(inS, inS); hole.lineTo(-inS, inS); hole.lineTo(-inS, -inS);
+            shape.holes.push(hole);
+            const ext = new THREE.ExtrudeGeometry(shape, { depth: CELL_DEPTH, bevelEnabled: false, curveSegments: 1 });
+            ext.translate(0, 0, -CELL_DEPTH/2); return ext;
+        }
+
+        function generateScene() {
+            currentSceneGroup.clear(); structColumns = []; graphData = []; displacement_visual = 0; impactGlowLight.intensity = 0; drawGraph();
+            const gGeom = new THREE.BoxGeometry(100, 1, 40);
+            const gMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+            const ground = new THREE.Mesh(gGeom, gMat); ground.position.set(30, START_Y - RADIUS - 0.5, 0); ground.receiveShadow = true;
+            currentSceneGroup.add(ground);
+            const backstop = new THREE.Mesh(new THREE.BoxGeometry(4, 25, 20), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+            backstop.position.set(structureLength + 2, START_Y + 10, 0); currentSceneGroup.add(backstop);
+
+            const type = ui.struct.value;
+            if (type === 'solid') {
+                const solidMesh = new THREE.Mesh(new THREE.BoxGeometry(structureLength, (ROWS * RADIUS * 1.5), CELL_DEPTH), matBase.clone()); 
+                solidMesh.position.set(structureLength/2 - w_orig/2, START_Y + (ROWS * RADIUS * 1.5)/2 - RADIUS, 0);
+                currentSceneGroup.add(solidMesh); structColumns.push({ isSolid: true, mesh: solidMesh });
+            } else {
+                const geom = type === 'square' ? createHollowSquare() : (type === 'honeycomb' ? createHollowHexagon() : new THREE.TorusGeometry(RADIUS, WALL_THICKNESS, 8, 24));
+                for (let c = 0; c < COLS; c++) {
+                    let colGroup = { origX: c * w_orig, cells: [] };
+                    for (let r = 0; r < ROWS; r++) {
+                        const xOffset = (type === 'square' || r % 2 === 0) ? 0 : w_orig / 2;
+                        const mesh = new THREE.Mesh(geom, matBase.clone());
+                        mesh.position.set(colGroup.origX + xOffset, START_Y + (r * 1.5 * RADIUS), 0);
+                        mesh.userData = { baseX: colGroup.origX + xOffset, row: r };
+                        currentSceneGroup.add(mesh); colGroup.cells.push(mesh);
+                    }
+                    structColumns.push(colGroup);
+                }
+            }
+            impactorWall = new THREE.Mesh(new THREE.BoxGeometry(6, 25, 20), new THREE.MeshStandardMaterial({ color: 0x3b82f6 }));
+            impactorWall.position.set(-2, START_Y + 10, 0); currentSceneGroup.add(impactorWall);
+            updateMetrics(0, 0, 0);
+            setPhase("SYSTEM IDLE", "#94a3b8", "transparent");
+        }
+
+        function getResistanceForce(visual_disp) {
+            if (visual_disp <= 0) return 0;
+            const type = ui.struct.value;
+            const densityScale = parseFloat(ui.dense.value) / 100;
+            const yieldPoint = w_orig * 0.5; 
+            
+            if (type === 'honeycomb') {
+                const PEAK = 240000 * densityScale; const PLATEAU = 200000 * densityScale; 
+                if (visual_disp < yieldPoint) return (visual_disp / yieldPoint) * PEAK;
+                if (visual_disp < maxDisplacement) return PLATEAU + Math.cos((visual_disp / w_orig) * Math.PI * 2) * (PLATEAU * 0.1);
+                return PLATEAU + Math.pow(visual_disp - maxDisplacement, 3) * 5000;
+            } else if (type === 'square') {
+                const PEAK = 280000 * densityScale; const PLATEAU = 120000 * densityScale; 
+                if (visual_disp < yieldPoint) return (visual_disp / yieldPoint) * PEAK;
+                if (visual_disp < maxDisplacement) return PLATEAU + Math.cos((visual_disp / square_side) * Math.PI * 2) * (PLATEAU * 0.8);
+                return PLATEAU + Math.pow(visual_disp - maxDisplacement, 3) * 5000;
+            } else if (type === 'solid') { return 8000000; } 
+            return 20000 * densityScale; 
+        }
+
+        function drawGraph() {
+            ctx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+            ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+            for(let i=1; i<4; i++) { ctx.beginPath(); ctx.moveTo(0, i*25); ctx.lineTo(300, i*25); ctx.stroke(); }
+            if (graphData.length < 2) return;
+            const maxX = structureLength; const maxY = 400000; 
+            ctx.beginPath(); ctx.strokeStyle = '#00f0ff'; ctx.lineWidth = 2;
+            graphData.forEach((p, i) => i === 0 ? ctx.moveTo((p.x/maxX)*300, 100-((p.f/maxY)*100)) : ctx.lineTo((p.x/maxX)*300, 100-((p.f/maxY)*100)));
+            ctx.stroke();
+        }
+
+        function applyDeformation(visual_disp) {
+            impactorWall.position.x = -2 + visual_disp;
+            const type = ui.struct.value; if (type === 'solid') return;
+            const baseWidth = w_orig; const maxCrush = w_orig * 0.85; 
+            let remaining = visual_disp; let currentX = visual_disp; 
+            structColumns.forEach(col => {
+                let crush = Math.min(remaining, maxCrush); remaining -= crush;
+                let scaleX = (baseWidth - crush) / baseWidth;
+                col.cells.forEach(cell => {
+                    cell.scale.set(scaleX, 1, 1);
+                    cell.position.x = currentX + (cell.userData.row % 2 === 0 || type==='square' ? 0 : (baseWidth - crush)/2);
+                    if (crush > 0.1) { cell.material.color.setHSL(0.05, 1, 0.5); cell.material.emissive.setHSL(0.05, 1, (crush/maxCrush)*0.8); }
+                });
+                currentX += (baseWidth - crush);
+            });
+        }
+
+        function updateMetrics(ke, f, g) {
+            document.getElementById('res-ke').innerText = (ke / 1000).toFixed(1) + " kJ";
+            const initialKE = 0.5 * parseFloat(ui.mass.value) * Math.pow(parseFloat(ui.vel.value)/3.6, 2);
+            document.getElementById('res-abs').innerText = initialKE > 0 ? Math.min(100, ((initialKE-ke)/initialKE)*100).toFixed(1)+"%" : "0%";
+            document.getElementById('res-g').innerText = g.toFixed(1) + " G";
+        }
+
+        function setPhase(text, color, bg) { ui.phase.innerText = text; ui.phase.style.color = color; ui.phase.style.borderColor = color; ui.phase.style.background = bg; }
+
+        function handleParamChange() {
+            document.getElementById('val-mass').innerText = ui.mass.value + " kg";
+            document.getElementById('val-vel').innerText = ui.vel.value + " km/h";
+            document.getElementById('val-dense').innerText = ui.dense.value + "%";
+            if (!isCrashing) generateScene();
+        }
+
+        [ui.struct, ui.mass, ui.vel, ui.dense].forEach(el => el.addEventListener('input', handleParamChange));
+        ui.btn.addEventListener('click', () => { isCrashing = true; mass = parseFloat(ui.mass.value); velocity = parseFloat(ui.vel.value)/3.6; graphData = []; ui.btn.disabled = true; generateScene(); });
+
+        generateScene();
+        function animate() {
+            requestAnimationFrame(animate); controls.update();
+            if (isCrashing) {
+                const force = getResistanceForce(displacement_visual); const acc = -(force / mass);
+                velocity += acc * 0.005; displacement_visual += (velocity * 0.005) / METER_PER_UNIT;
+                graphData.push({x: displacement_visual, f: force}); drawGraph();
+                updateMetrics(0.5*mass*Math.max(0,velocity)**2, force, Math.abs(acc)/9.81);
+                applyDeformation(displacement_visual);
+                if (velocity <= 0 || displacement_visual >= structureLength) { isCrashing = false; ui.btn.disabled = false; setPhase("TEST COMPLETE", "#10b981", "rgba(16,185,129,0.1)"); }
+            }
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
